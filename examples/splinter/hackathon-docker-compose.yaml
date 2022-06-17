@@ -1,0 +1,1068 @@
+# Copyright 2020 Cargill Incorporated
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ------------------------------------------------------------------------------
+version: "3.6"
+
+volumes:
+  contracts-shared:
+  registry:
+  gridd-vroozi:
+  gridd-buyer1:
+  gridd-buyer2:
+  gridd-buyer3:
+  gridd-supplier1:
+  gridd-supplier2:
+  templates-shared:
+  cache-shared:
+
+services:
+  # ---== shared services ==---
+
+  pike-contract-builder:
+    image: pike-contract-builder
+    container_name: pike-contract-builder
+    build:
+      context: ../..
+      dockerfile: contracts/pike/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+    volumes:
+      - contracts-shared:/usr/share/scar
+    entrypoint: |
+      bash -c "
+        cp /tmp/grid-pike*.scar /usr/share/scar
+      "
+
+  product-contract-builder:
+    image: product-contract-builder
+    container_name: product-contract-builder
+    build:
+      context: ../..
+      dockerfile: contracts/product/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+    volumes:
+      - contracts-shared:/usr/share/scar
+    entrypoint: |
+      bash -c "
+        cp /tmp/grid-product*.scar /usr/share/scar
+      "
+
+  schema-contract-builder:
+    image: schema-contract-builder
+    container_name: schema-contract-builder
+    build:
+      context: ../..
+      dockerfile: contracts/schema/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+    volumes:
+      - contracts-shared:/usr/share/scar
+    entrypoint: |
+      bash -c "
+        cp /tmp/grid-schema*.scar /usr/share/scar
+      "
+
+  tnt-contract-builder:
+    image: tnt-contract-builder
+    container_name: tnt-contract-builder
+    build:
+      context: ../..
+      dockerfile: contracts/track_and_trace/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+    volumes:
+      - contracts-shared:/usr/share/scar
+    entrypoint: |
+      bash -c "
+        cp /tmp/grid-track-and-trace*.scar /usr/share/scar
+      "
+
+  location-contract-builder:
+    image: location-contract-builder
+    container_name: location-contract-builder
+    build:
+      context: ../..
+      dockerfile: contracts/location/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+    volumes:
+      - contracts-shared:/usr/share/scar
+    entrypoint: |
+      bash -c "
+        cp /tmp/grid-location*.scar /usr/share/scar
+      "
+
+  purchase-order-contract-builder:
+    image: purchase-order-contract-builder
+    container_name: purchase-order-contract-builder
+    build:
+      context: ../..
+      dockerfile: contracts/purchase_order/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+    volumes:
+      - contracts-shared:/usr/share/scar
+    entrypoint: |
+      bash -c "
+        cp /tmp/grid-purchase-order*.scar /usr/share/scar
+      "
+
+  generate-registry:
+    image: splintercommunity/splinter-cli:0.6
+    volumes:
+      - registry:/registry
+      - gridd-vroozi:/gridd_vroozi/keys
+      - gridd-buyer1:/gridd_buyer1/keys
+      - gridd-buyer2:/gridd_buyer2/keys
+      - gridd-buyer3:/gridd_buyer3/keys
+      - gridd-supplier1:/gridd_supplier1/keys
+      - gridd-supplier2:/gridd_supplier2/keys
+    depends_on:
+      - gridd-vroozi
+      - gridd-buyer1
+      - gridd-buyer2
+      - gridd-buyer3
+      - gridd-supplier1
+      - gridd-supplier2
+    command: |
+      bash -c "
+        if [ -f /registry/registry.yaml ]
+        then
+          # generate keys
+          splinter keygen vroozi --key-dir /registry
+          splinter keygen buyer1 --key-dir /registry
+          splinter keygen buyer2 --key-dir /registry
+          splinter keygen buyer3 --key-dir /registry
+          splinter keygen supplier1 --key-dir /registry
+          splinter keygen supplier2 --key-dir /registry
+          # check if splinterd-vroozi is available
+          while [[ $$(curl --write-out %{http_code} --silent --output /dev/null http://splinterd-vroozi:8085/status) -ne 401 ]] ; do
+             >&2 echo \"splinterd is unavailable - sleeping\"
+             sleep 1
+          done
+          # check if splinterd-buyer1 is available
+          while [[ $$(curl --write-out %{http_code} --silent --output /dev/null http://splinterd-buyer1:8085/status) -ne 401 ]] ; do
+             >&2 echo \"splinterd is unavailable - sleeping\"
+             sleep 1
+          done
+          # check if splinterd-buyer2 is available
+          while [[ $$(curl --write-out %{http_code} --silent --output /dev/null http://splinterd-buyer2:8085/status) -ne 401 ]] ; do
+             >&2 echo \"splinterd is unavailable - sleeping\"
+             sleep 1
+          done
+          # check if splinterd-buyer3 is available
+          while [[ $$(curl --write-out %{http_code} --silent --output /dev/null http://splinterd-buyer3:8085/status) -ne 401 ]] ; do
+             >&2 echo \"splinterd is unavailable - sleeping\"
+             sleep 1
+          done
+          # check if splinterd-supplier1 is available
+          while [[ $$(curl --write-out %{http_code} --silent --output /dev/null http://splinterd-supplier1:8085/status) -ne 401 ]] ; do
+             >&2 echo \"splinterd is unavailable - sleeping\"
+             sleep 1
+          done
+          # check if splinterd-supplier2 is available
+          while [[ $$(curl --write-out %{http_code} --silent --output /dev/null http://splinterd-supplier2:8085/status) -ne 401 ]] ; do
+             >&2 echo \"splinterd is unavailable - sleeping\"
+             sleep 1
+          done
+          # build the registry
+          splinter registry build \
+            http://splinterd-vroozi:8085 \
+            --file /registry/registry.yaml \
+            --key /gridd_vroozi/keys/gridd.priv \
+            --key-file /registry/vroozi.pub \
+            --metadata organization='Vroozi'
+          splinter registry build \
+            http://splinterd-buyer1:8085 \
+            --file /registry/registry.yaml \
+            --key /gridd_buyer1/keys/gridd.priv \
+            --key-file /registry/buyer1.pub \
+            --metadata organization='Buyer1'
+          splinter registry build \
+            http://splinterd-buyer2:8085 \
+            --file /registry/registry.yaml \
+            --key /gridd_buyer2/keys/gridd.priv \
+            --key-file /registry/buyer2.pub \
+            --metadata organization='Buyer2'
+          splinter registry build \
+            http://splinterd-buyer3:8085 \
+            --file /registry/registry.yaml \
+            --key /gridd_buyer3/keys/gridd.priv \
+            --key-file /registry/buyer3.pub \
+            --metadata organization='Buyer3'
+          splinter registry build \
+            http://splinterd-supplier1:8085 \
+            --file /registry/registry.yaml \
+            --key /gridd_supplier1/keys/gridd.priv \
+            --key-file /registry/supplier1.pub \
+            --metadata organization='Supplier1'
+          splinter registry build \
+            http://splinterd-supplier2:8085 \
+            --file /registry/registry.yaml \
+            --key /gridd_supplier2/keys/gridd.priv \
+            --key-file /registry/supplier2.pub \
+            --metadata organization='supplier2'
+        fi
+      "
+
+  registry-server:
+    image: httpd:2.4
+    container_name: registry-server
+    restart: always
+    expose:
+      - 80
+    ports:
+      - "8099:80"
+    volumes:
+      - registry:/usr/local/apache2/htdocs
+
+  # ---== vroozi node ==---
+
+  db-vroozi:
+    image: postgres
+    container_name: db-vroozi
+    hostname: db-vroozi
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: grid
+      POSTGRES_PASSWORD: grid_example
+      POSTGRES_DB: grid
+
+  gridd-vroozi:
+    image: gridd
+    container_name: gridd-vroozi
+    hostname: gridd-vroozi
+    build:
+      context: ../..
+      dockerfile: daemon/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+        - CARGO_ARGS= --features experimental
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - gridd-vroozi:/etc/grid/keys
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - cache-shared:/var/cache/grid
+    expose:
+      - 8080
+    ports:
+      - "8080:8080"
+    environment:
+      GRID_DAEMON_KEY: "vroozi-agent"
+      GRID_DAEMON_ENDPOINT: "http://gridd-vroozi:8080"
+    entrypoint: |
+      bash -c "
+        # we need to wait for the db to have started.
+        until PGPASSWORD=grid_example psql -h db-vroozi -U grid -c '\q' > /dev/null 2>&1; do
+            >&2 echo \"Database is unavailable - sleeping\"
+            sleep 1
+        done
+        grid -vv keygen --system --skip && \
+        grid -vv database migrate \
+            -C postgres://grid:grid_example@db-vroozi/grid &&
+        gridd -vv -b 0.0.0.0:8080 -k root -C splinter:http://splinterd-vroozi:8085 \
+            --database-url postgres://grid:grid_example@db-vroozi/grid
+      "
+
+  scabbard-cli-vroozi:
+    image: splintercommunity/scabbard-cli:0.6
+    container_name: scabbard-cli-vroozi
+    hostname: scabbard-cli-vroozi
+    volumes:
+      - gridd-vroozi:/root/.splinter/keys
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "vroozi"
+      SPLINTER_REST_API_URL: http://splinterd-vroozi:8085
+    command: tail -f /dev/null
+
+  splinterd-vroozi:
+    image: splintercommunity/splinterd:0.6
+    container_name: splinterd-vroozi
+    hostname: splinterd-vroozi
+    expose:
+      - 8044
+      - 8085
+    ports:
+      - "8044:8044"
+      - "8085:8085"
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - gridd-vroozi:/etc/grid/keys
+    depends_on:
+      - gridd-vroozi
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "vroozi"
+      SPLINTER_REST_API_URL: http://splinterd-vroozi:8085
+    entrypoint: |
+      bash -c "
+        while [ ! -f /etc/grid/keys/gridd.pub ] ; do
+          >&2 echo \"Grid key file is unavailable - sleeping\"
+          sleep 1
+        done && \
+        if [ ! -s /etc/splinter/allow_keys ]
+        then
+          echo $$(cat /registry/vroozi.pub) >> /etc/splinter/allow_keys
+          echo $$(cat /etc/grid/keys/gridd.pub) >> /etc/splinter/allow_keys
+        fi && \
+        until PGPASSWORD=admin psql -h splinter-db-vroozi -U admin -d splinter -c '\q'; do
+          >&2 echo \"Database is unavailable - sleeping\"
+          sleep 1
+        done
+        splinter cert generate --skip && \
+        splinter keygen --system --skip && \
+        splinter database migrate -C postgres://admin:admin@splinter-db-vroozi:5432/splinter && \
+        splinter upgrade -C postgres://admin:admin@splinter-db-vroozi:5432/splinter && \
+        splinterd -vv \
+        --registries http://registry-server:80/registry.yaml \
+        --rest-api-endpoint http://0.0.0.0:8085 \
+        --network-endpoints tcps://0.0.0.0:8044 \
+        --advertised-endpoint tcps://splinterd-vroozi:8044 \
+        --node-id vroozi-node-000 \
+        --enable-biome-credentials \
+        --database postgres://admin:admin@splinter-db-vroozi:5432/splinter \
+        --tls-insecure
+      "
+
+  splinter-db-vroozi:
+    image: postgres
+    container_name: splinter-db-vroozi
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: splinter
+
+  grid-ui-vroozi:
+    build:
+      context: ../../
+      dockerfile: ui/Dockerfile
+      args:
+        REPO_VERSION: ${REPO_VERSION}
+    image: grid-ui-vroozi
+    container_name: grid-ui-vroozi
+    expose:
+      - 80
+    ports:
+      - "3030:80"
+    environment:
+      SPLINTER_URL: "http://splinterd-vroozi:8085"
+      SAPLING_URL: " http://sapling-dev-server-vroozi:80"
+      GRID_URL: "http://gridd-vroozi:8080"
+
+  # ---== buyer1 node ==---
+
+  db-buyer1:
+    image: postgres
+    container_name: db-buyer1
+    hostname: db-buyer1
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: grid
+      POSTGRES_PASSWORD: grid_example
+      POSTGRES_DB: grid
+
+  gridd-buyer1:
+    image: gridd
+    container_name: gridd-buyer1
+    hostname: gridd-buyer1
+    build:
+      context: ../..
+      dockerfile: daemon/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+        - CARGO_ARGS= --features experimental
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - gridd-buyer1:/etc/grid/keys
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - cache-shared:/var/cache/grid
+    expose:
+      - 8080
+    ports:
+      - "8081:8080"
+    environment:
+      GRID_DAEMON_KEY: "buyer1-agent"
+      GRID_DAEMON_ENDPOINT: "http://gridd-buyer1:8080"
+    entrypoint: |
+      bash -c "
+        # we need to wait for the db to have started.
+        until PGPASSWORD=grid_example psql -h db-buyer1 -U grid -c '\q' > /dev/null 2>&1; do
+            >&2 echo \"Database is unavailable - sleeping\"
+            sleep 1
+        done
+        grid -vv keygen --system --skip && \
+        grid -vv database migrate \
+            -C postgres://grid:grid_example@db-buyer1/grid &&
+        gridd -vv -k root -b 0.0.0.0:8080 -C splinter:http://splinterd-buyer1:8085 \
+            --database-url postgres://grid:grid_example@db-buyer1/grid
+      "
+
+  scabbard-cli-buyer1:
+    image: splintercommunity/scabbard-cli:0.6
+    container_name: scabbard-cli-buyer1
+    hostname: scabbard-cli-buyer1
+    volumes:
+      - gridd-buyer1:/root/.splinter/keys
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "buyer1"
+      SPLINTER_REST_API_URL: http://splinterd-buyer1:8085
+    command: tail -f /dev/null
+
+  splinterd-buyer1:
+    image: splintercommunity/splinterd:0.6
+    container_name: splinterd-buyer1
+    hostname: splinterd-buyer1
+    expose:
+      - 8044
+      - 8085
+    ports:
+      - "8045:8044"
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - gridd-buyer1:/etc/grid/keys
+    depends_on:
+      - gridd-buyer1
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "buyer1"
+      SPLINTER_REST_API_URL: http://splinterd-buyer1:8085
+    entrypoint: |
+      bash -c "
+        while [ ! -f /etc/grid/keys/gridd.pub ] ; do
+          >&2 echo \"Grid key file is unavailable - sleeping\"
+          sleep 1
+        done && \
+        if [ ! -s /etc/splinter/allow_keys ]
+        then
+          echo $$(cat /registry/buyer1.pub) >> /etc/splinter/allow_keys
+          echo $$(cat /etc/grid/keys/gridd.pub) >> /etc/splinter/allow_keys
+        fi && \
+        until PGPASSWORD=admin psql -h splinter-db-buyer1 -U admin -d splinter -c '\q'; do
+          >&2 echo \"Database is unavailable - sleeping\"
+          sleep 1
+        done
+        splinter cert generate --skip && \
+        splinter keygen --system --skip && \
+        splinter database migrate -C postgres://admin:admin@splinter-db-buyer1:5432/splinter && \
+        splinter upgrade -C postgres://admin:admin@splinter-db-buyer1:5432/splinter && \
+        splinterd -vv \
+        --registries http://registry-server:80/registry.yaml \
+        --rest-api-endpoint http://0.0.0.0:8085 \
+        --network-endpoints tcps://0.0.0.0:8044 \
+        --advertised-endpoint tcps://splinterd-buyer1:8044 \
+        --node-id buyer1-node-000 \
+        --enable-biome-credentials \
+        --database postgres://admin:admin@splinter-db-buyer1:5432/splinter \
+        --tls-insecure
+      "
+
+  splinter-db-buyer1:
+    image: postgres
+    container_name: splinter-db-buyer1
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: splinter
+
+  grid-ui-buyer1:
+    build:
+      context: ../../
+      dockerfile: ui/Dockerfile
+      args:
+        REPO_VERSION: ${REPO_VERSION}
+    image: grid-ui-buyer1
+    container_name: grid-ui-buyer1
+    expose:
+      - 80
+    ports:
+      - "3031:80"
+    environment:
+      SPLINTER_URL: "http://splinterd-buyer1:8085"
+      SAPLING_URL: " http://sapling-dev-server-buyer1:80"
+      GRID_URL: "http://gridd-buyer1:8080"
+
+  # ---== buyer2 node ==---
+
+  db-buyer2:
+    image: postgres
+    container_name: db-buyer2
+    hostname: db-buyer2
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: grid
+      POSTGRES_PASSWORD: grid_example
+      POSTGRES_DB: grid
+
+  gridd-buyer2:
+    image: gridd
+    container_name: gridd-buyer2
+    hostname: gridd-buyer2
+    build:
+      context: ../..
+      dockerfile: daemon/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+        - CARGO_ARGS= --features experimental
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - gridd-buyer2:/etc/grid/keys
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - cache-shared:/var/cache/grid
+    expose:
+      - 8080
+    ports:
+      - "8082:8080"
+    environment:
+      GRID_DAEMON_KEY: "buyer2-agent"
+      GRID_DAEMON_ENDPOINT: "http://gridd-buyer2:8080"
+    entrypoint: |
+      bash -c "
+        # we need to wait for the db to have started.
+        until PGPASSWORD=grid_example psql -h db-buyer2 -U grid -c '\q' > /dev/null 2>&1; do
+            >&2 echo \"Database is unavailable - sleeping\"
+            sleep 1
+        done
+        grid -vv keygen --system --skip && \
+        grid -vv database migrate \
+            -C postgres://grid:grid_example@db-buyer2/grid &&
+        gridd -vv -b 0.0.0.0:8080 -k root -C splinter:http://splinterd-buyer2:8085 \
+            --database-url postgres://grid:grid_example@db-buyer2/grid
+      "
+
+  splinterd-buyer2:
+    image: splintercommunity/splinterd:0.6
+    container_name: splinterd-buyer2
+    hostname: splinterd-buyer2
+    expose:
+      - 8044
+      - 8085
+    ports:
+      - "8046:8044"
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - gridd-buyer2:/etc/grid/keys
+    depends_on:
+      - gridd-buyer2
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "buyer2"
+      SPLINTER_REST_API_URL: http://splinterd-buyer2:8085
+    entrypoint: |
+      bash -c "
+        while [ ! -f /etc/grid/keys/gridd.pub ] ; do
+          >&2 echo \"Grid key file is unavailable - sleeping\"
+          sleep 1
+        done && \
+        if [ ! -s /etc/splinter/allow_keys ]
+        then
+          echo $$(cat /registry/buyer2.pub) >> /etc/splinter/allow_keys
+          echo $$(cat /etc/grid/keys/gridd.pub) >> /etc/splinter/allow_keys
+        fi && \
+        until PGPASSWORD=admin psql -h splinter-db-buyer2 -U admin -d splinter -c '\q'; do
+          >&2 echo \"Database is unavailable - sleeping\"
+          sleep 1
+        done
+        splinter cert generate --skip && \
+        splinter keygen --system --skip && \
+        splinter database migrate -C postgres://admin:admin@splinter-db-buyer2:5432/splinter && \
+        splinter upgrade -C postgres://admin:admin@splinter-db-buyer2:5432/splinter && \
+        splinterd -vv \
+        --registries http://registry-server:80/registry.yaml \
+        --rest-api-endpoint http://0.0.0.0:8085 \
+        --network-endpoints tcps://0.0.0.0:8044 \
+        --advertised-endpoint tcps://splinterd-buyer2:8044 \
+        --node-id buyer2-node-000 \
+        --enable-biome-credentials \
+        --database postgres://admin:admin@splinter-db-buyer2:5432/splinter \
+        --tls-insecure
+      "
+
+  splinter-db-buyer2:
+    image: postgres
+    container_name: splinter-db-buyer2
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: splinter
+
+  grid-ui-buyer2:
+    build:
+      context: ../../
+      dockerfile: ui/Dockerfile
+      args:
+        REPO_VERSION: ${REPO_VERSION}
+    image: grid-ui-buyer2
+    container_name: grid-ui-buyer2
+    expose:
+      - 80
+    ports:
+      - "3032:80"
+    environment:
+      SPLINTER_URL: "http://splinterd-buyer2:8085"
+      SAPLING_URL: " http://sapling-dev-server-buyer2:80"
+      GRID_URL: "http://gridd-buyer2:8080"
+
+  # ---== buyer3 node ==---
+
+  db-buyer3:
+    image: postgres
+    container_name: db-buyer3
+    hostname: db-buyer3
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: grid
+      POSTGRES_PASSWORD: grid_example
+      POSTGRES_DB: grid
+
+  gridd-buyer3:
+    image: gridd
+    container_name: gridd-buyer3
+    hostname: gridd-buyer3
+    build:
+      context: ../..
+      dockerfile: daemon/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+        - CARGO_ARGS= --features experimental
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - gridd-buyer3:/etc/grid/keys
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - cache-shared:/var/cache/grid
+    expose:
+      - 8080
+    ports:
+      - "8083:8080"
+    environment:
+      GRID_DAEMON_KEY: "buyer3-agent"
+      GRID_DAEMON_ENDPOINT: "http://gridd-buyer3:8080"
+    entrypoint: |
+      bash -c "
+        # we need to wait for the db to have started.
+        until PGPASSWORD=grid_example psql -h db-buyer3 -U grid -c '\q' > /dev/null 2>&1; do
+            >&2 echo \"Database is unavailable - sleeping\"
+            sleep 1
+        done
+        grid -vv keygen --system --skip && \
+        grid -vv database migrate \
+            -C postgres://grid:grid_example@db-buyer3/grid &&
+        gridd -vv -k root -b 0.0.0.0:8080 -C splinter:http://splinterd-buyer3:8085 \
+            --database-url postgres://grid:grid_example@db-buyer3/grid
+      "
+
+  scabbard-cli-buyer3:
+    image: splintercommunity/scabbard-cli:0.6
+    container_name: scabbard-cli-buyer3
+    hostname: scabbard-cli-buyer3
+    volumes:
+      - gridd-buyer3:/root/.splinter/keys
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "buyer3"
+      SPLINTER_REST_API_URL: http://splinterd-buyer3:8085
+    command: tail -f /dev/null
+
+  splinterd-buyer3:
+    image: splintercommunity/splinterd:0.6
+    container_name: splinterd-buyer3
+    hostname: splinterd-buyer3
+    expose:
+      - 8044
+      - 8085
+    ports:
+      - "8048:8044"
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - gridd-buyer3:/etc/grid/keys
+    depends_on:
+      - gridd-buyer3
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "buyer3"
+      SPLINTER_REST_API_URL: http://splinterd-buyer3:8085
+    entrypoint: |
+      bash -c "
+        while [ ! -f /etc/grid/keys/gridd.pub ] ; do
+          >&2 echo \"Grid key file is unavailable - sleeping\"
+          sleep 1
+        done && \
+        if [ ! -s /etc/splinter/allow_keys ]
+        then
+          echo $$(cat /registry/buyer3.pub) >> /etc/splinter/allow_keys
+          echo $$(cat /etc/grid/keys/gridd.pub) >> /etc/splinter/allow_keys
+        fi && \
+        until PGPASSWORD=admin psql -h splinter-db-buyer3 -U admin -d splinter -c '\q'; do
+          >&2 echo \"Database is unavailable - sleeping\"
+          sleep 1
+        done
+        splinter cert generate --skip && \
+        splinter keygen --system --skip && \
+        splinter database migrate -C postgres://admin:admin@splinter-db-buyer3:5432/splinter && \
+        splinter upgrade -C postgres://admin:admin@splinter-db-buyer3:5432/splinter && \
+        splinterd -vv \
+        --registries http://registry-server:80/registry.yaml \
+        --rest-api-endpoint http://0.0.0.0:8085 \
+        --network-endpoints tcps://0.0.0.0:8044 \
+        --advertised-endpoint tcps://splinterd-buyer3:8044 \
+        --node-id buyer3-node-000 \
+        --enable-biome-credentials \
+        --database postgres://admin:admin@splinter-db-buyer3:5432/splinter \
+        --tls-insecure
+      "
+
+  splinter-db-buyer3:
+    image: postgres
+    container_name: splinter-db-buyer3
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: splinter
+
+  grid-ui-buyer3:
+    build:
+      context: ../../
+      dockerfile: ui/Dockerfile
+      args:
+        REPO_VERSION: ${REPO_VERSION}
+    image: grid-ui-buyer3
+    container_name: grid-ui-buyer3
+    expose:
+      - 80
+    ports:
+      - "3033:80"
+    environment:
+      SPLINTER_URL: "http://splinterd-buyer3:8085"
+      SAPLING_URL: " http://sapling-dev-server-buyer3:80"
+      GRID_URL: "http://gridd-buyer3:8080"
+
+  # ---== supplier1 node ==---
+
+  db-supplier1:
+    image: postgres
+    container_name: db-supplier1
+    hostname: db-supplier1
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: grid
+      POSTGRES_PASSWORD: grid_example
+      POSTGRES_DB: grid
+
+  gridd-supplier1:
+    image: gridd
+    container_name: gridd-supplier1
+    hostname: gridd-supplier1
+    build:
+      context: ../..
+      dockerfile: daemon/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+        - CARGO_ARGS= --features experimental
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - gridd-supplier1:/etc/grid/keys
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - cache-shared:/var/cache/grid
+    expose:
+      - 8080
+    ports:
+      - "8084:8080"
+    environment:
+      GRID_DAEMON_KEY: "supplier1-agent"
+      GRID_DAEMON_ENDPOINT: "http://gridd-supplier1:8080"
+    entrypoint: |
+      bash -c "
+        # we need to wait for the db to have started.
+        until PGPASSWORD=grid_example psql -h db-supplier1 -U grid -c '\q' > /dev/null 2>&1; do
+            >&2 echo \"Database is unavailable - sleeping\"
+            sleep 1
+        done
+        grid -vv keygen --system --skip && \
+        grid -vv database migrate \
+            -C postgres://grid:grid_example@db-supplier1/grid &&
+        gridd -vv -k root -b 0.0.0.0:8080 -C splinter:http://splinterd-supplier1:8085 \
+            --database-url postgres://grid:grid_example@db-supplier1/grid
+      "
+
+  scabbard-cli-supplier1:
+    image: splintercommunity/scabbard-cli:0.6
+    container_name: scabbard-cli-supplier1
+    hostname: scabbard-cli-supplier1
+    volumes:
+      - gridd-supplier1:/root/.splinter/keys
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "supplier1"
+      SPLINTER_REST_API_URL: http://splinterd-supplier1:8085
+    command: tail -f /dev/null
+
+  splinterd-supplier1:
+    image: splintercommunity/splinterd:0.6
+    container_name: splinterd-supplier1
+    hostname: splinterd-supplier1
+    expose:
+      - 8044
+      - 8085
+    ports:
+      - "8047:8044"
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - gridd-supplier1:/etc/grid/keys
+    depends_on:
+      - gridd-supplier1
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "supplier1"
+      SPLINTER_REST_API_URL: http://splinterd-supplier1:8085
+    entrypoint: |
+      bash -c "
+        while [ ! -f /etc/grid/keys/gridd.pub ] ; do
+          >&2 echo \"Grid key file is unavailable - sleeping\"
+          sleep 1
+        done && \
+        if [ ! -s /etc/splinter/allow_keys ]
+        then
+          echo $$(cat /registry/supplier1.pub) >> /etc/splinter/allow_keys
+          echo $$(cat /etc/grid/keys/gridd.pub) >> /etc/splinter/allow_keys
+        fi && \
+        until PGPASSWORD=admin psql -h splinter-db-supplier1 -U admin -d splinter -c '\q'; do
+          >&2 echo \"Database is unavailable - sleeping\"
+          sleep 1
+        done
+        splinter cert generate --skip && \
+        splinter keygen --system --skip && \
+        splinter database migrate -C postgres://admin:admin@splinter-db-supplier1:5432/splinter && \
+        splinter upgrade -C postgres://admin:admin@splinter-db-supplier1:5432/splinter && \
+        splinterd -vv \
+        --registries http://registry-server:80/registry.yaml \
+        --rest-api-endpoint http://0.0.0.0:8085 \
+        --network-endpoints tcps://0.0.0.0:8044 \
+        --advertised-endpoint tcps://splinterd-supplier1:8044 \
+        --node-id supplier1-node-000 \
+        --enable-biome-credentials \
+        --database postgres://admin:admin@splinter-db-supplier1:5432/splinter \
+        --tls-insecure
+      "
+
+  splinter-db-supplier1:
+    image: postgres
+    container_name: splinter-db-supplier1
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: splinter
+
+  grid-ui-supplier1:
+    build:
+      context: ../../
+      dockerfile: ui/Dockerfile
+      args:
+        REPO_VERSION: ${REPO_VERSION}
+    image: grid-ui-supplier1
+    container_name: grid-ui-supplier1
+    expose:
+      - 80
+    ports:
+      - "3034:80"
+    environment:
+      SPLINTER_URL: "http://splinterd-supplier1:8085"
+      SAPLING_URL: " http://sapling-dev-server-supplier1:80"
+      GRID_URL: "http://gridd-supplier1:8080"
+
+  # ---== supplier2 node ==---
+
+  db-supplier2:
+    image: postgres
+    container_name: db-supplier2
+    hostname: db-supplier2
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: grid
+      POSTGRES_PASSWORD: grid_example
+      POSTGRES_DB: grid
+
+  gridd-supplier2:
+    image: gridd
+    container_name: gridd-supplier2
+    hostname: gridd-supplier2
+    build:
+      context: ../..
+      dockerfile: daemon/Dockerfile
+      args:
+        - REPO_VERSION=${REPO_VERSION}
+        - CARGO_ARGS= --features experimental
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - gridd-supplier2:/etc/grid/keys
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - cache-shared:/var/cache/grid
+    expose:
+      - 8080
+    ports:
+      - "8086:8080"
+    environment:
+      GRID_DAEMON_KEY: "supplier2-agent"
+      GRID_DAEMON_ENDPOINT: "http://gridd-supplier2:8080"
+    entrypoint: |
+      bash -c "
+        # we need to wait for the db to have started.
+        until PGPASSWORD=grid_example psql -h db-supplier2 -U grid -c '\q' > /dev/null 2>&1; do
+            >&2 echo \"Database is unavailable - sleeping\"
+            sleep 1
+        done
+        grid -vv keygen --system --skip && \
+        grid -vv database migrate \
+            -C postgres://grid:grid_example@db-supplier2/grid &&
+        gridd -vv -k root -b 0.0.0.0:8080 -C splinter:http://splinterd-supplier2:8085 \
+            --database-url postgres://grid:grid_example@db-supplier2/grid
+      "
+
+  scabbard-cli-supplier2:
+    image: splintercommunity/scabbard-cli:0.6
+    container_name: scabbard-cli-supplier2
+    hostname: scabbard-cli-supplier2
+    volumes:
+      - gridd-supplier2:/root/.splinter/keys
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "supplier2"
+      SPLINTER_REST_API_URL: http://splinterd-supplier2:8085
+    command: tail -f /dev/null
+
+  splinterd-supplier2:
+    image: splintercommunity/splinterd:0.6
+    container_name: splinterd-supplier2
+    hostname: splinterd-supplier2
+    expose:
+      - 8044
+      - 8085
+    ports:
+      - "8049:8044"
+    volumes:
+      - contracts-shared:/usr/share/scar
+      - registry:/registry
+      - templates-shared:/usr/share/splinter/circuit-templates
+      - gridd-supplier2:/etc/grid/keys
+    depends_on:
+      - gridd-supplier2
+    environment:
+      CYLINDER_PATH: /registry
+      CYLINDER_KEY_NAME: "supplier2"
+      SPLINTER_REST_API_URL: http://splinterd-supplier2:8085
+    entrypoint: |
+      bash -c "
+        while [ ! -f /etc/grid/keys/gridd.pub ] ; do
+          >&2 echo \"Grid key file is unavailable - sleeping\"
+          sleep 1
+        done && \
+        if [ ! -s /etc/splinter/allow_keys ]
+        then
+          echo $$(cat /registry/supplier2.pub) >> /etc/splinter/allow_keys
+          echo $$(cat /etc/grid/keys/gridd.pub) >> /etc/splinter/allow_keys
+        fi && \
+        until PGPASSWORD=admin psql -h splinter-db-supplier2 -U admin -d splinter -c '\q'; do
+          >&2 echo \"Database is unavailable - sleeping\"
+          sleep 1
+        done
+        splinter cert generate --skip && \
+        splinter keygen --system --skip && \
+        splinter database migrate -C postgres://admin:admin@splinter-db-supplier2:5432/splinter && \
+        splinter upgrade -C postgres://admin:admin@splinter-db-supplier2:5432/splinter && \
+        splinterd -vv \
+        --registries http://registry-server:80/registry.yaml \
+        --rest-api-endpoint http://0.0.0.0:8085 \
+        --network-endpoints tcps://0.0.0.0:8044 \
+        --advertised-endpoint tcps://splinterd-supplier2:8044 \
+        --node-id supplier2-node-000 \
+        --enable-biome-credentials \
+        --database postgres://admin:admin@splinter-db-supplier2:5432/splinter \
+        --tls-insecure
+      "
+
+  splinter-db-supplier2:
+    image: postgres
+    container_name: splinter-db-supplier2
+    restart: always
+    expose:
+      - 5432
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: splinter
+
+  grid-ui-supplier2:
+    build:
+      context: ../../
+      dockerfile: ui/Dockerfile
+      args:
+        REPO_VERSION: ${REPO_VERSION}
+    image: grid-ui-supplier2
+    container_name: grid-ui-supplier2
+    expose:
+      - 80
+    ports:
+      - "3035:80"
+    environment:
+      SPLINTER_URL: "http://splinterd-supplier2:8085"
+      SAPLING_URL: " http://sapling-dev-server-supplier2:80"
+      GRID_URL: "http://gridd-supplier2:8080"
