@@ -16,18 +16,15 @@ Once the nodes are up you can set up Circuits, Pikes and Grid items such as Sche
 
 # To set up a circuit (sample commands)
 
-//get public key from node
+
 docker exec gridd-alpha cat /etc/grid/keys/gridd.pub
 
-03930c1525649306e6077f1fe1a0bdce3b0971dba470e68ac7827de27604424448
+<copy key>
 
-//connect to container
 docker exec -it splinterd-alpha bash
 
-//copy it locally
-echo "03930c1525649306e6077f1fe1a0bdce3b0971dba470e68ac7827de27604424448" > gridd.pub
+echo "{key}" > gridd.pub
 
-//propose a new circuit with beta node
 splinter circuit propose \
    --key /registry/alpha.priv \
    --url http://splinterd-alpha:8085  \
