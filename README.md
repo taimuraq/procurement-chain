@@ -14,6 +14,32 @@ $ docker-compose -f examples/splinter/hackathon-docker-compose.yaml
 
 Once the nodes are up you can set up Circuits, Pikes and Grid items such as Schemas, Products and POs. 
 
+# To set up a circuit (sample commands)
+
+//get public key from node
+docker exec gridd-alpha cat /etc/grid/keys/gridd.pub
+
+03930c1525649306e6077f1fe1a0bdce3b0971dba470e68ac7827de27604424448
+
+//connect to container
+docker exec -it splinterd-alpha bash
+
+//copy it locally
+echo "03930c1525649306e6077f1fe1a0bdce3b0971dba470e68ac7827de27604424448" > gridd.pub
+
+//propose a new circuit with beta node
+splinter circuit propose \
+   --key /registry/alpha.priv \
+   --url http://splinterd-alpha:8085  \
+   --node alpha-node-000::tcps://splinterd-alpha:8044 \
+   --node beta-node-000::tcps://splinterd-beta:8044 \
+   --service gsAA::alpha-node-000 \
+   --service gsBB::beta-node-000 \
+   --service-type *::scabbard \
+   --management grid \
+   --service-arg *::admin_keys=$(cat gridd.pub) \
+   --service-peer-group gsAA,gsBB
+
 
 ## More Information
 
